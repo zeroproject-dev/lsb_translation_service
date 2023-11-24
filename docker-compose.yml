@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  rtc-translator:
+    build: .
+    # image: python:3.10.13
+    # container_name: python-test
+    container_name: rtc-translator
+    ports:
+      - 6969:6969
+    # volumes:
+    #   - .:/tf
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
