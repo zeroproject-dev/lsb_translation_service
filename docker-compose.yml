@@ -6,6 +6,8 @@ services:
     container_name: rtc-translator
     ports:
       - 6969:6969
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
     # volumes:
