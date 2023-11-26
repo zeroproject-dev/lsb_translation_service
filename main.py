@@ -15,8 +15,18 @@ from src.detection import extract_keypoints, mediapipe_detection, mp_holistic
 from aiohttp import web
 # from av import VideoFrame
 
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
+from aiortc import (
+    MediaStreamTrack,
+    RTCConfiguration,
+    RTCIceServer,
+    RTCPeerConnection,
+    RTCSessionDescription,
+)
 from aiortc.contrib.media import MediaRelay
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 ROOT = os.path.dirname(__file__)
 
@@ -63,7 +73,6 @@ class VideoTransformTrack(MediaStreamTrack):
         self.track = track
 
         self.user_id = user_id
-        self.data_channel = None
 
         self.sequence = []
         self.predictions = []
@@ -78,11 +87,13 @@ class VideoTransformTrack(MediaStreamTrack):
         )
 
     async def recv(self):
+        # print("recv, ", len(self.sequence))
         frame = await self.track.recv()
         results = mediapipe_detection(frame.to_ndarray(format="bgr24"), holistic)
 
         keypoints = extract_keypoints(results)
         self.sequence.append(keypoints)
+
         if len(self.sequence) == 30:
             res = model.predict(np.expand_dims(self.sequence, axis=0))[0]
             prediction = np.argmax(res)
@@ -91,7 +102,6 @@ class VideoTransformTrack(MediaStreamTrack):
 
             # if np.unique(self.predictions[-10:])[0] == prediction:
             if res[prediction] > self.threshold:
-                print(self.data_channel)
                 if actions[prediction] != self.prev:
                     self.prev = actions[prediction]
                     user_data_channels[self.user_id].send(
@@ -105,7 +115,35 @@ async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
-    pc = RTCPeerConnection()
+    config = RTCConfiguration(
+        [
+            # RTCIceServer("stun:stun.l.google.com:19302"),
+            RTCIceServer("stun:stun.relay.metered.ca:80"),
+            RTCIceServer(
+                "turn:a.relay.metered.ca:80",
+                os.getenv("TURN_USER"),
+                os.getenv("TURN_PASS"),
+            ),
+            RTCIceServer(
+                "turn:a.relay.metered.ca:80?transport=tcp",
+                os.getenv("TURN_USER"),
+                os.getenv("TURN_PASS"),
+            ),
+            RTCIceServer(
+                "turn:a.relay.metered.ca:443",
+                os.getenv("TURN_USER"),
+                os.getenv("TURN_PASS"),
+            ),
+            RTCIceServer(
+                "turn:a.relay.metered.ca:443?transport=tcp",
+                os.getenv("TURN_USER"),
+                os.getenv("TURN_PASS"),
+            ),
+            # RTCIceServer("turn:numb.viagenie.ca", "webrtc@live.com", "muazkh"),
+        ]
+    )
+
+    pc = RTCPeerConnection(config)
     pc_id = "PeerConnection(%s)" % uuid.uuid4()
     pcs.add(pc)
 
@@ -142,7 +180,6 @@ async def offer(request):
             # vtt.data_channel = user_data_channels.get(pc_id)
             print("TRACK")
             print(pc_id)
-            print(vtt.data_channel)
             pc.addTrack(vtt)
 
         @track.on("ended")
@@ -157,11 +194,11 @@ async def offer(request):
     if answer is not None:
         await pc.setLocalDescription(answer)
 
+    res = json.dumps({"sdp": pc.localDescription.sdp, "type": pc.localDescription.type})
+
     return web.Response(
         content_type="application/json",
-        text=json.dumps(
-            {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
-        ),
+        text=res,
     )
 
 
