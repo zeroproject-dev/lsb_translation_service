@@ -87,7 +87,6 @@ class VideoTransformTrack(MediaStreamTrack):
         )
 
     async def recv(self):
-        # print("recv, ", len(self.sequence))
         frame = await self.track.recv()
         results = mediapipe_detection(frame.to_ndarray(format="bgr24"), holistic)
 
@@ -95,20 +94,22 @@ class VideoTransformTrack(MediaStreamTrack):
         self.sequence.append(keypoints)
 
         if len(self.sequence) == 30:
-            res = model.predict(np.expand_dims(self.sequence, axis=0))[0]
-            prediction = np.argmax(res)
-            # self.predictions.append(prediction)
-            self.sequence.clear()
-
-            # if np.unique(self.predictions[-10:])[0] == prediction:
-            if res[prediction] > self.threshold:
-                if actions[prediction] != self.prev:
-                    self.prev = actions[prediction]
-                    user_data_channels[self.user_id].send(
-                        json.dumps({"prediction": actions[prediction]})
-                    )
+            asyncio.ensure_future(self.process_predictions())
 
         return frame
+
+    async def process_predictions(self):
+        res = model.predict(np.expand_dims(self.sequence, axis=0))[0]
+        prediction = np.argmax(res)
+
+        if res[prediction] > self.threshold:
+            if actions[prediction] != self.prev:
+                self.prev = actions[prediction]
+                user_data_channels[self.user_id].send(
+                    json.dumps({"prediction": actions[prediction]})
+                )
+
+        self.sequence.clear()
 
 
 async def offer(request):
@@ -214,6 +215,8 @@ if __name__ == "__main__":
     cors = aiohttp_cors.setup(app)
     app.on_shutdown.append(on_shutdown)
     app.router.add_post("/offer", offer)
+    # app.router.add_post("/update-actions", update_actions)
+    # app.router.add_post("/update-model", update_model)
 
     for route in list(app.router.routes()):
         cors.add(
