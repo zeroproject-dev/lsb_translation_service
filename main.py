@@ -13,7 +13,6 @@ import numpy as np
 from src.detection import extract_keypoints, mediapipe_detection, mp_holistic
 
 from aiohttp import web
-# from av import VideoFrame
 
 from aiortc import (
     MediaStreamTrack,
@@ -52,6 +51,7 @@ dummy_input = np.random.rand(1, 30, 1662).astype(np.float32)
 _ = model(dummy_input)
 
 model.load_weights("lsb_B_GRU.h5")
+_ = model.predict(dummy_input)
 
 
 holistic = mp_holistic.Holistic(
@@ -118,29 +118,7 @@ async def offer(request):
 
     config = RTCConfiguration(
         [
-            # RTCIceServer("stun:stun.l.google.com:19302"),
-            RTCIceServer("stun:stun.relay.metered.ca:80"),
-            RTCIceServer(
-                "turn:a.relay.metered.ca:80",
-                os.getenv("TURN_USER"),
-                os.getenv("TURN_PASS"),
-            ),
-            RTCIceServer(
-                "turn:a.relay.metered.ca:80?transport=tcp",
-                os.getenv("TURN_USER"),
-                os.getenv("TURN_PASS"),
-            ),
-            RTCIceServer(
-                "turn:a.relay.metered.ca:443",
-                os.getenv("TURN_USER"),
-                os.getenv("TURN_PASS"),
-            ),
-            RTCIceServer(
-                "turn:a.relay.metered.ca:443?transport=tcp",
-                os.getenv("TURN_USER"),
-                os.getenv("TURN_PASS"),
-            ),
-            # RTCIceServer("turn:numb.viagenie.ca", "webrtc@live.com", "muazkh"),
+            RTCIceServer("stun:stun.l.google.com:19302"),
         ]
     )
 
@@ -159,11 +137,6 @@ async def offer(request):
         print(pc_id)
         print(channel)
         user_data_channels[pc_id] = channel
-
-        @channel.on("message")
-        def on_message(message):
-            if isinstance(message, str) and message.startswith("ping"):
-                channel.send("pong" + message[4:])
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
@@ -215,8 +188,7 @@ if __name__ == "__main__":
     cors = aiohttp_cors.setup(app)
     app.on_shutdown.append(on_shutdown)
     app.router.add_post("/offer", offer)
-    # app.router.add_post("/update-actions", update_actions)
-    # app.router.add_post("/update-model", update_model)
+    # app.router.add_post("/update", update_nn)
 
     for route in list(app.router.routes()):
         cors.add(
