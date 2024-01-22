@@ -23,10 +23,6 @@ from aiortc import (
 )
 from aiortc.contrib.media import MediaRelay
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 ROOT = os.path.dirname(__file__)
 
 logger = logging.getLogger("pc")
